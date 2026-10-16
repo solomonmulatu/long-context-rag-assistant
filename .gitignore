@@ -24,7 +24,6 @@ build/
 dist/
 
 # Local data and vector database
-data/*
 !data/.gitkeep
 chroma_data/
 chroma/
