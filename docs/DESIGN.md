@@ -2,7 +2,7 @@
 
 ## Chunking
 
-- Split extracted text into chunks of about **700 tokens**, with **100 tokens of overlap**. This is a starting point: keep sections and page boundaries where practical, and avoid combining unrelated sections.
+- Split extracted text into chunks of about **3000 tokens**, with **500 tokens of overlap**. This is a starting point: keep sections and page boundaries where practical, and avoid combining unrelated sections.
 - Attach `source`, `page`, and `section` metadata to every chunk. Preserve page references through parsing and chunking so citations can point back to the PDF.
 - Tune chunk size and overlap against a small set of representative questions; use retrieved context quality and citation accuracy as the guide.
 
