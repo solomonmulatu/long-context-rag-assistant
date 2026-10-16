@@ -1,0 +1,15 @@
+[project]
+name = "rag-assistant"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi",
+    "uvicorn[standard]",
+    "streamlit",
+    "langchain",
+    "langchain-community",
+    "langchain-openai",
+    "langchain_chroma",
+    "unstructured[all-docs]",
+    "python_dotenv",
+]
