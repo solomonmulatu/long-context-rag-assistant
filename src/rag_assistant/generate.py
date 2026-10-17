@@ -1,10 +1,17 @@
+import json
+from typing import List
+
+from langchain_community.document_loaders.unstructured import Element
+from langchain_core.documents import Document
 from langchain_core.messages import HumanMessage
 from langchain_openai import ChatOpenAI
 
+from rag_assistant import ingest
 from rag_assistant.config import settings
+from rag_assistant.ingest import Ingest
 
 
-class Ingest:
+class Generate:
     @staticmethod
     def create_ai_enhanced_summary(
             text: str,
@@ -54,3 +61,73 @@ TEXT:
             raise TypeError("Expected the model to return text content.")
 
         return response.content
+
+    @staticmethod
+    def summarise_chunks(chunks:List[Element])->List[Document]:
+        """Process chunks and create LangChain documents with AI summaries."""
+        documents: list[Document] = []
+        total_chunks = len(chunks)
+
+        print("Processing chunks with AI summaries...")
+
+        for index, chunk in enumerate(chunks, start=1):
+            print(f"Processing chunk {index}/{total_chunks}")
+
+            content = Ingest.separate_content_type(chunk)
+
+            print(f"  Types found: {content['types']}")
+            print(
+                f"  Tables: {len(content['tables'])}, "
+                f"Images: {len(content['images'])}"
+            )
+
+            if content["tables"] or content["images"]:
+                try:
+                    page_content = Generate.create_ai_enhanced_summary(
+                        content["text"],
+                        content["tables"],
+                        content["images"],
+                    )
+                    print("  AI summary created successfully")
+                except Exception as exc:
+                    print(f"  AI summary failed: {exc}")
+                    page_content = content["text"]
+            else:
+                page_content = content["text"]
+
+            chunk_metadata = getattr(chunk, "metadata", None)
+            metadata = {
+                "chunk_index": index,
+                "content_types": json.dumps(content["types"]),
+                "original_content": json.dumps({
+                    "raw_text": content["text"],
+                    "tables_html": content["tables"],
+                    "images_base64": content["images"],
+                }),
+            }
+
+            # Preserve available fields for source citations.
+            for key in ("filename", "page_number", "section"):
+                value = getattr(chunk_metadata, key, None)
+                if value is not None:
+                    metadata[key] = value
+
+            document = Document(
+                page_content=page_content,
+                metadata=metadata,
+            )
+            documents.append(document)
+
+        print(f"Processed {len(documents)} chunks")
+        return documents
+
+
+
+
+
+
+
+
+
+
+
