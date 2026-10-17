@@ -3,7 +3,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     openai_api_key: str
-    openai_chat_model: str
+    openai_chat_model: str="gpt-4o"
     openai_embedding_model: str = "text-embedding-3-small"
 
     chroma_persist_directory: str = "./chroma_data"
