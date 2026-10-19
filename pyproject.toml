@@ -1,7 +1,7 @@
 [project]
 name = "rag-assistant"
 version = "0.1.0"
-requires-python = ">=3.12"
+requires-python = ">=3.12,<3.13"
 dependencies = [
     "fastapi",
     "uvicorn[standard]",
@@ -9,7 +9,12 @@ dependencies = [
     "langchain",
     "langchain-community",
     "langchain-openai",
-    "langchain_chroma",
-    "unstructured[all-docs]",
-    "python_dotenv",
+    "langchain-chroma",
+    "unstructured[pdf]",
+    "python-dotenv",
+    "pydantic-settings",
 ]
+
+[build-system]
+requires = ["uv_build>=0.12.12,<0.13"]
+build-backend = "uv_build"

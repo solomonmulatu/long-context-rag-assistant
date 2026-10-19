@@ -1,4 +1,5 @@
 import json
+import os
 from pathlib import Path
 from typing import TypedDict, List
 
@@ -150,7 +151,6 @@ class Ingest:
         print(f"Processed {len(documents)} chunks")
         return documents
 
-
     @staticmethod
     def export_chunks_to_json(
             chunks: list[Document],
@@ -208,31 +208,56 @@ class Ingest:
         print(f"Vector store created at {persist_directory}")
         return vectorstore
 
+
+
     @staticmethod
-    def run_complete_ingestion_pipeline(pdf_path: str|Path):
-        """Run the complete RAG ingestion pipeline"""
-        print("🚀 Starting RAG Ingestion Pipeline")
+    def check_db_store(
+            persist_directory: str = settings.chroma_persist_directory,
+    ) -> bool:
+        """Return True if the Chroma collection contains records."""
+        if not Path(persist_directory).is_dir():
+            print("Vector store directory does not exist.")
+            return False
+
+        vectorstore = Chroma(
+            persist_directory=persist_directory,
+            collection_name="rag_assistant",
+        )
+
+        count = vectorstore._collection.count()
+        print(f"Found {count} records in the vector store.")
+        return count > 0
+
+    @staticmethod
+    def run_complete_ingestion_pipeline(pdf_path: str | Path) -> Chroma:
+        """Run the complete RAG ingestion pipeline."""
+        print("Starting RAG ingestion pipeline")
         print("=" * 50)
 
-        # Step 1: partition
+        persist_directory = settings.chroma_persist_directory
+        embedding_model = OpenAIEmbeddings(
+            model=settings.openai_embedding_model,
+            api_key=settings.openai_api_key,
+        )
+
+        if Ingest.check_db_store(persist_directory):
+            print("Database already contains data. Loading it.")
+            return Chroma(
+                collection_name="rag_assistant",
+                persist_directory=persist_directory,
+                embedding_function=embedding_model,
+            )
+
         elements = Ingest.partition_document(pdf_path)
-
-        # Step 2: Chunk
         chunks = Ingest.create_chunks_by_title(elements)
+        documents = Ingest.summarise_chunks(chunks)
 
-        # Step 3: Ai Summarization
-        summarized_chunks = Ingest.summarise_chunks(chunks)
+        vectorstore = Ingest.create_vector_store(
+            documents,
+            persist_directory=persist_directory,
+        )
 
-        # Step 4: Vector Store
-        db = Ingest.create_vector_store(summarized_chunks, persist_directory=settings.chroma_persist_directory)
-
-        print("🎉 Pipeline completed successfully!")
-        return db
+        print("Ingestion pipeline completed successfully")
+        return vectorstore
 
 
-if __name__ == "__main__":
-    # pdf_path = Path.cwd() / "data" / "lost-in-the-middle.pdf"
-
-    PROJECT_ROOT = Path(__file__).resolve().parents[2]
-    pdf_path = PROJECT_ROOT / "data" / "lost-in-the-middle.pdf"
-    Ingest.run_complete_ingestion_pipeline(pdf_path)
