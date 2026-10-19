@@ -7,7 +7,7 @@ from langchain_core.messages import HumanMessage
 from langchain_openai import ChatOpenAI
 
 from rag_assistant import ingest
-from rag_assistant.config import settings
+from rag_assistant.config import  settings
 from rag_assistant.ingest import Ingest
 
 
@@ -19,6 +19,7 @@ class Generate:
             images: list[str],
     ) -> str:
         """Create a searchable summary of text, tables, and images."""
+
         llm = ChatOpenAI(
             model=settings.openai_chat_model,
             temperature=0,

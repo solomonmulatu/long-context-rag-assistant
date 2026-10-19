@@ -2,10 +2,14 @@ import json
 from pathlib import Path
 from typing import TypedDict, List
 
+from langchain_chroma import Chroma
 from langchain_core.documents import Document
+from langchain_openai import OpenAIEmbeddings
 from unstructured.documents.elements import Element
 from unstructured.chunking.title import chunk_by_title
 from unstructured.partition.pdf import partition_pdf
+
+from rag_assistant.config import  settings
 
 
 class ChunkContent(TypedDict):
@@ -27,7 +31,7 @@ class Ingest:
         print(f"📄 Partitioning document: {file_path}")
 
         elements = partition_pdf(
-            filename=file_path,  #path to your pdf file
+            filename=file_path,  # path to your pdf file
             strategy="hi_res",  # Use the most accurate (but slower) processing  method of extraction
             infer_table_structure=True,  # Keep tables as structured HTML, not jumbled text
             extract_image_block_types=["Image"],  # Grab Images found in the pdf
@@ -54,7 +58,7 @@ class Ingest:
         return chunks
 
     @staticmethod
-    def separate_content_type(chunk: Element)-> ChunkContent:
+    def separate_content_type(chunk: Element) -> ChunkContent:
         """Collect text, table content, and image payloads from a chunk."""
 
         content_data: ChunkContent = {
@@ -67,22 +71,22 @@ class Ingest:
         # check for images and tables from the original element
         if hasattr(chunk, 'metadata') and hasattr(chunk.metadata, 'orig_elements'):
             for element in chunk.metadata.orig_elements:
-                element_type=type(element).__name__
+                element_type = type(element).__name__
 
                 # Handle tables
-                if element_type =='table':
+                if element_type == 'table':
                     content_data['types'].append('table')
-                    table_html=getattr(element.metadata, 'text_as_html',None)
+                    table_html = getattr(element.metadata, 'text_as_html', None)
 
                     content_data['tables'].append(table_html or element.text)
 
                 # Handle images
-                if element_type =='image':
+                if element_type == 'image':
                     if hasattr(element, 'metadata') and hasattr(element.metadata, 'image_base64'):
-                      content_data['types'].append('image')
-                      content_data['images'].append(element.metadata.image_base64)
+                        content_data['types'].append('image')
+                        content_data['images'].append(element.metadata.image_base64)
 
-        content_data['types']=list(set(content_data['types']))
+        content_data['types'] = list(set(content_data['types']))
 
         return content_data
 
@@ -115,5 +119,31 @@ class Ingest:
         print(f"Exported {len(export_data)} chunks to {filename}")
         return export_data
 
+    @staticmethod
+    def create_vector_store(
+            documents: list[Document],
+            persist_directory: str = "db_v1/chroma_db",
+    ) -> Chroma:
+        """Create OpenAI embeddings and store documents in persistent Chroma."""
+        if not documents:
+            raise ValueError("Cannot create a vector store with no documents.")
 
 
+        Path(persist_directory).mkdir(parents=True, exist_ok=True)
+
+        print("Creating embeddings and storing documents in Chroma...")
+
+        embedding_model = OpenAIEmbeddings(
+            model=settings.openai_embedding_model
+        )
+
+        vectorstore = Chroma.from_documents(
+            documents=documents,
+            embedding=embedding_model,
+            persist_directory=persist_directory,
+            collection_name="rag_assistant",
+            collection_metadata={"hnsw:space": "cosine"},
+        )
+
+        print(f"Vector store created at {persist_directory}")
+        return vectorstore
