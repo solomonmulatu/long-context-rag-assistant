@@ -9,7 +9,8 @@ from unstructured.documents.elements import Element
 from unstructured.chunking.title import chunk_by_title
 from unstructured.partition.pdf import partition_pdf
 
-from rag_assistant.config import  settings
+from rag_assistant.config import settings
+from rag_assistant.generate import Generate
 
 
 class ChunkContent(TypedDict):
@@ -91,6 +92,66 @@ class Ingest:
         return content_data
 
     @staticmethod
+    def summarise_chunks(chunks: List[Element]) -> List[Document]:
+        """Process chunks and create LangChain documents with AI summaries."""
+        documents: list[Document] = []
+        total_chunks = len(chunks)
+
+        print("Processing chunks with AI summaries...")
+
+        for index, chunk in enumerate(chunks, start=1):
+            print(f"Processing chunk {index}/{total_chunks}")
+
+            content = Ingest.separate_content_type(chunk)
+
+            print(f"  Types found: {content['types']}")
+            print(
+                f"  Tables: {len(content['tables'])}, "
+                f"Images: {len(content['images'])}"
+            )
+
+            if content["tables"] or content["images"]:
+                try:
+                    page_content = Generate.create_ai_enhanced_summary(
+                        content["text"],
+                        content["tables"],
+                        content["images"],
+                    )
+                    print("  AI summary created successfully")
+                except Exception as exc:
+                    print(f"  AI summary failed: {exc}")
+                    page_content = content["text"]
+            else:
+                page_content = content["text"]
+
+            chunk_metadata = getattr(chunk, "metadata", None)
+            metadata = {
+                "chunk_index": index,
+                "content_types": json.dumps(content["types"]),
+                "original_content": json.dumps({
+                    "raw_text": content["text"],
+                    "tables_html": content["tables"],
+                    "images_base64": content["images"],
+                }),
+            }
+
+            # Preserve available fields for source citations.
+            for key in ("filename", "page_number", "section"):
+                value = getattr(chunk_metadata, key, None)
+                if value is not None:
+                    metadata[key] = value
+
+            document = Document(
+                page_content=page_content,
+                metadata=metadata,
+            )
+            documents.append(document)
+
+        print(f"Processed {len(documents)} chunks")
+        return documents
+
+
+    @staticmethod
     def export_chunks_to_json(
             chunks: list[Document],
             filename: str | Path = "chunks_export.json",
@@ -122,12 +183,11 @@ class Ingest:
     @staticmethod
     def create_vector_store(
             documents: list[Document],
-            persist_directory: str = "db_v1/chroma_db",
+            persist_directory: str = settings.chroma_persist_directory,
     ) -> Chroma:
         """Create OpenAI embeddings and store documents in persistent Chroma."""
         if not documents:
             raise ValueError("Cannot create a vector store with no documents.")
-
 
         Path(persist_directory).mkdir(parents=True, exist_ok=True)
 
@@ -147,3 +207,32 @@ class Ingest:
 
         print(f"Vector store created at {persist_directory}")
         return vectorstore
+
+    @staticmethod
+    def run_complete_ingestion_pipeline(pdf_path: str|Path):
+        """Run the complete RAG ingestion pipeline"""
+        print("🚀 Starting RAG Ingestion Pipeline")
+        print("=" * 50)
+
+        # Step 1: partition
+        elements = Ingest.partition_document(pdf_path)
+
+        # Step 2: Chunk
+        chunks = Ingest.create_chunks_by_title(elements)
+
+        # Step 3: Ai Summarization
+        summarized_chunks = Ingest.summarise_chunks(chunks)
+
+        # Step 4: Vector Store
+        db = Ingest.create_vector_store(summarized_chunks, persist_directory=settings.chroma_persist_directory)
+
+        print("🎉 Pipeline completed successfully!")
+        return db
+
+
+if __name__ == "__main__":
+    # pdf_path = Path.cwd() / "data" / "lost-in-the-middle.pdf"
+
+    PROJECT_ROOT = Path(__file__).resolve().parents[2]
+    pdf_path = PROJECT_ROOT / "data" / "lost-in-the-middle.pdf"
+    Ingest.run_complete_ingestion_pipeline(pdf_path)
