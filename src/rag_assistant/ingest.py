@@ -1,6 +1,8 @@
+import json
 from pathlib import Path
-from typing import TypedDict
+from typing import TypedDict, List
 
+from langchain_core.documents import Document
 from unstructured.documents.elements import Element
 from unstructured.chunking.title import chunk_by_title
 from unstructured.partition.pdf import partition_pdf
@@ -83,4 +85,35 @@ class Ingest:
         content_data['types']=list(set(content_data['types']))
 
         return content_data
+
+    @staticmethod
+    def export_chunks_to_json(
+            chunks: list[Document],
+            filename: str | Path = "chunks_export.json",
+    ) -> list[dict]:
+        """Export processed chunks and their metadata to a JSON file."""
+        export_data = []
+
+        for index, doc in enumerate(chunks, start=1):
+            metadata = dict(doc.metadata)
+
+            original_content = metadata.get("original_content", "{}")
+            if isinstance(original_content, str):
+                original_content = json.loads(original_content)
+
+            metadata["original_content"] = original_content
+
+            export_data.append({
+                "chunk_id": index,
+                "enhanced_content": doc.page_content,
+                "metadata": metadata,
+            })
+
+        with open(filename, "w", encoding="utf-8") as file:
+            json.dump(export_data, file, indent=2, ensure_ascii=False)
+
+        print(f"Exported {len(export_data)} chunks to {filename}")
+        return export_data
+
+
 
