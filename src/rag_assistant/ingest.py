@@ -75,15 +75,17 @@ class Ingest:
             for element in chunk.metadata.orig_elements:
                 element_type = type(element).__name__
 
+                print(f"Element Type {element_type}")
+
                 # Handle tables
-                if element_type == 'table':
+                if element_type == 'Table':
                     content_data['types'].append('table')
                     table_html = getattr(element.metadata, 'text_as_html', None)
 
                     content_data['tables'].append(table_html or element.text)
 
                 # Handle images
-                if element_type == 'image':
+                if element_type == 'Image':
                     if hasattr(element, 'metadata') and hasattr(element.metadata, 'image_base64'):
                         content_data['types'].append('image')
                         content_data['images'].append(element.metadata.image_base64)
@@ -256,6 +258,7 @@ class Ingest:
             documents,
             persist_directory=persist_directory,
         )
+        json= Ingest.export_chunks_to_json(documents)
 
         print("Ingestion pipeline completed successfully")
         return vectorstore

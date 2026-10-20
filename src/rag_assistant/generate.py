@@ -6,7 +6,7 @@ from langchain_core.documents import Document
 from langchain_core.messages import HumanMessage
 from langchain_openai import ChatOpenAI
 
-from rag_assistant.config import  settings
+from rag_assistant.config import settings
 
 
 class Generate:
@@ -60,16 +60,4 @@ TEXT:
             raise TypeError("Expected the model to return text content.")
 
         return response.content
-
-
-
-
-
-
-
-
-
-
-
-
 
