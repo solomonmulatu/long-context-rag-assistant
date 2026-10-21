@@ -258,7 +258,7 @@ class Ingest:
             documents,
             persist_directory=persist_directory,
         )
-        json= Ingest.export_chunks_to_json(documents)
+        Ingest.export_chunks_to_json(documents)
 
         print("Ingestion pipeline completed successfully")
         return vectorstore
