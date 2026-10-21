@@ -163,6 +163,3 @@ python eval/run_eval.py
 
 Evaluate answer correctness, citation accuracy, and whether the assistant abstains when the document does not support an answer.
 
-## Licensing and source documents
-
-Check the source PDF’s license and distribution terms before committing or sharing it. Keep raw documents out of the repository unless you have permission to redistribute them. The project’s `LICENSE` covers this repository’s code and original materials; it may not grant rights to the source document.
