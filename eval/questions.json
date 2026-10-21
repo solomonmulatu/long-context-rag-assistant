@@ -1,0 +1,26 @@
+[
+  {
+    "id": "q1",
+    "question": "What is the lost-in-the-middle effect?",
+    "expected_points": [
+      "Models use information near the beginning or end of long contexts more effectively",
+      "Performance can drop when relevant information is in the middle"
+    ],
+    "expected_abstention": false
+  },
+  {
+    "id": "q2",
+    "question": "What two broad task types did the authors use to study long-context performance?",
+    "expected_points": [
+      "synthetic retrieval",
+      "multi-document question answering"
+    ],
+    "expected_abstention": false
+  },
+  {
+    "id": "q3",
+    "question": "What was the exact temperature in the authors' unpublished training run?",
+    "expected_points": [],
+    "expected_abstention": true
+  }
+]
