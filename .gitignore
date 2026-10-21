@@ -28,6 +28,7 @@ dist/
 chroma_data/
 chroma/
 *.sqlite3
+src/rag_assistant/db_v1
 
 # Logs and editor/OS files
 *.log
