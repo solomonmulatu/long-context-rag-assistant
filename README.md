@@ -1,82 +1,107 @@
-# RAG Assistant: How Language Models Use Long Contexts
+# PDF RAG Assistant
 
-A retrieval-augmented generation (RAG) assistant that answers questions about **How Language Models Use Long Contexts** using the provided document and citations to its source passages.
+A retrieval-augmented generation (RAG) assistant that answers questions about user-uploaded PDFs and cites the source passages used.
 
 ## What it does
 
-- Parses the source PDF, including OCR for scanned pages when needed.
-- Cleans and chunks extracted content while retaining source, page, and section metadata.
-- Embeds chunks with the OpenAI Embeddings API and stores them in Chroma.
-- Retrieves relevant passages for a user question and uses them as context for an OpenAI language model.
-- Returns an answer with citations. If the document does not provide enough evidence, the assistant says so rather than guessing.
+- Lets users upload PDFs through the Streamlit interface.
+- Validates uploads before processing: PDF format, maximum file size of 10 MB, and maximum page count of 50. Encrypted or corrupt PDFs are rejected with a clear error.
+- Parses PDFs with Unstructured and Poppler. Tesseract OCR can be enabled for scanned documents; if OCR is disabled and no text is extracted, the app asks the user to upload a text-based PDF.
+- Cleans and chunks extracted content, preserving citation metadata.
+- Assigns each PDF a unique `doc_id` and stores it with every chunk.
+- Embeds chunks with the OpenAI Embeddings API and stores them in a shared Chroma collection.
+- Lets users query one uploaded document or search across all uploaded documents.
+- Generates answers from retrieved excerpts, with source citations. It abstains when the documents do not provide enough evidence.
+
+## Shared knowledge base
+
+Uploaded PDFs and their indexed chunks are stored in a **shared knowledge base**. Visitors can query documents uploaded by other visitors. The app does not provide per-user or per-session isolation, so the UI should tell users that uploads are shared.
+
+Documents remain available until removed or expired under the configured retention policy. Removing a document must delete its vectors from Chroma by `doc_id` and delete its stored PDF if one is retained.
 
 ## Non-goals
 
-- **Multi-user authentication or role-based access control:** Intended for a single user or trusted demo environment.
-- **Model fine-tuning:** Uses existing language models without training them on the source material.
-- **Web search or external knowledge retrieval:** Answers are grounded only in the configured documents.
-- **Document modification:** Users can query the knowledge base but cannot edit or annotate source documents.
+- **Authentication or role-based access control:** This demo does not identify individual users or provide private document collections.
+- **Model fine-tuning:** Uses existing language models without training them on uploaded documents.
+- **Web search or external knowledge retrieval:** Answers are grounded in the shared document collection only.
+- **Document editing:** Users can query documents but cannot edit or annotate them.
 - **Autonomous agents or external tool execution:** The assistant answers questions and does not take actions outside the RAG workflow.
 - **Guaranteed answers to every question:** The assistant may decline when retrieved context does not provide enough evidence.
-- **Production-scale infrastructure:** Focuses on demonstrating RAG, citation accuracy, and long-context handling rather than large-scale deployment.
+- **Production-scale infrastructure:** Focuses on demonstrating RAG, citation accuracy, and document question answering.
 
 ## Tech stack
 
 - **Language:** Python 3.12+
 - **Document parsing:** Unstructured Python library
 - **PDF utilities:** Poppler (`poppler-utils`)
-- **OCR:** Tesseract (`tesseract-ocr`)
-- **File type detection:** `libmagic`
-- **Embeddings:** OpenAI Embeddings API (for example, `text-embedding-3-small`)
+- **OCR:** Tesseract (`tesseract-ocr`), optional for scanned PDFs
+- **File type detection:** `libmagic`, where required by the platform and Unstructured configuration
+- **Embeddings:** OpenAI Embeddings API, such as `text-embedding-3-small`
 - **Vector store:** Chroma
 - **Language model:** OpenAI API
 - **API:** FastAPI
 - **UI:** Streamlit
+- **Python environment and dependencies:** `uv`
 
 ## Architecture
 
-### Ingestion
+### PDF upload and ingestion
 
 ```text
-PDF → Unstructured parsing → clean and normalize → chunk with metadata
-    → OpenAI embeddings → Chroma
+User uploads PDF in Streamlit
+    → FastAPI validates file type, size, page count, and readability
+    → Unstructured parses PDF (Poppler as needed)
+    → Tesseract OCR for scanned PDFs, when enabled
+    → Clean and chunk content
+    → Attach doc_id, source, page, and section metadata
+    → OpenAI embeddings
+    → Shared Chroma collection
 ```
 
-Poppler and Tesseract support PDF processing and OCR as needed. Each stored chunk retains `source`, `page`, and `section` metadata for citations.
+Each PDF gets a unique `doc_id`. Every chunk retains that ID and its citation metadata. The temporary upload file is removed after processing unless the app is configured to retain the original PDF.
 
 ### Question and answer
 
 ```text
-User → Streamlit UI → FastAPI → OpenAI query embedding → Chroma top-k retrieval
-     → optional reranking → grounded prompt → OpenAI LLM → cited answer
+Question + optional doc_id
+    → Streamlit UI
+    → FastAPI
+    → OpenAI query embedding
+    → Chroma top-k retrieval, filtered by doc_id when selected
+    → Optional reranking
+    → Grounded prompt with citation metadata
+    → OpenAI LLM
+    → Answer with citations, or abstention
 ```
 
-See [`docs/design.md`](docs/design.md) for the initial chunking, retrieval, prompt, and abstention choices. See [`docs/rag-architecture.svg`](docs/rag-architecture.svg) for the architecture diagram.
+See [`docs/design.md`](docs/design.md) for chunking, retrieval, prompt, and abstention choices. See [`docs/rag-architecture.png`](docs/rag-architecture.png) for the architecture diagram.
 
 ## Project structure
 
 ```text
 rag-assistant/
 ├── src/rag_assistant/
-│   ├── ingest.py        # Parse, clean, chunk, embed, and store documents
-│   ├── retrieve.py      # Embed questions and retrieve relevant chunks
-│   ├── generate.py      # Build the grounded prompt and generate answers
+│   ├── ingest.py        # Validate, parse, chunk, embed, and store PDFs
+│   ├── retrieve.py      # Retrieve chunks from the shared Chroma collection
+│   ├── generate.py      # Build grounded prompts and generate cited answers
 │   ├── config.py        # Application settings and environment variables
-│   ├── schemas.py       # Shared request and response models
-│   └── api.py           # FastAPI routes
+│   ├── schemas.py       # API request and response models
+│   └── api.py           # FastAPI upload, query, and document-management routes
 ├── app/
 │   └── streamlit_app.py # UI that calls the FastAPI service
-├── data/                # Source documents; check licensing before sharing
+├── data/                # Optional sample documents; check licensing before sharing
+├── uploads/             # Temporary/runtime uploads; do not commit
 ├── eval/
 │   ├── questions.json   # Evaluation questions
 │   └── run_eval.py      # Evaluation runner
 ├── tests/
 ├── docs/
 │   ├── design.md
-│   └── rag-architecture.svg
+│   └── rag-architecture.png
 ├── .env.example
 ├── .gitignore
 ├── pyproject.toml
+├── uv.lock
 ├── LICENSE
 └── README.md
 ```
@@ -85,41 +110,26 @@ rag-assistant/
 
 ### Prerequisites
 
-- Python 3.12 or newer
-- Poppler and Tesseract installed and available on your system path for PDF and OCR workflows
-- `libmagic` installed if required by your platform and Unstructured configuration
+- Python 3.12+
+- `uv`
 - An OpenAI API key
+- Poppler installed and available on your system path
+- Tesseract installed if OCR for scanned PDFs is enabled
+- `libmagic` if required by your platform and Unstructured configuration
 
-### Set up a virtual environment
+### Install dependencies
 
-In PowerShell, from the project root:
-
-```powershell
-py -m venv .venv
-.\.venv\Scripts\Activate.ps1
-```
-
-If PowerShell blocks activation, allow it for the current terminal session and activate again:
+From the project root in PowerShell:
 
 ```powershell
-Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
-.\.venv\Scripts\Activate.ps1
+uv sync
 ```
 
-### Install Python dependencies
-
-Declare the application’s Python packages in `pyproject.toml`, then install the project from the root directory:
-
-```powershell
-python -m pip install --upgrade pip
-python -m pip install -e .
-```
-
-Poppler, Tesseract, and `libmagic` are system dependencies; installing Python packages does not install those programs.
+Poppler, Tesseract, and `libmagic` are system dependencies; `uv sync` does not install them.
 
 ### Configure environment variables
 
-Copy the example file and add your key to the local `.env` file:
+Copy the example file and add your API key to `.env`:
 
 ```powershell
 Copy-Item .env.example .env
@@ -129,37 +139,36 @@ Example `.env.example`:
 
 ```dotenv
 OPENAI_API_KEY=replace-me
-OPENAI_CHAT_MODEL=your-chat-model
+OPENAI_CHAT_MODEL=gpt-4o
 OPENAI_EMBEDDING_MODEL=text-embedding-3-small
-CHROMA_PERSIST_DIRECTORY=./chroma_data
+CHROMA_PERSIST_DIRECTORY=chroma_data
 API_BASE_URL=http://127.0.0.1:8000
 ```
 
-Keep `.env` and API keys out of version control. Commit `.env.example` with placeholders only.
+Keep `.env` and API keys out of version control. Commit `.env.example` with placeholders only. Resolve the Chroma path relative to the project root so it does not depend on the directory from which the app is launched.
 
-## Running the application
+### Run the application
 
 Start the FastAPI backend in one terminal:
 
 ```powershell
-uvicorn rag_assistant.api:app --reload
+uv run uvicorn rag_assistant.api:app --reload
 ```
 
 Start the Streamlit UI in another terminal:
 
 ```powershell
-streamlit run app/streamlit_app.py
+uv run streamlit run app/streamlit_app.py
 ```
 
-The Streamlit app sends questions to FastAPI, which coordinates retrieval and generation. Add the source PDF to the configured data location and run the ingestion workflow before asking questions.
+The Streamlit app sends uploads and questions to FastAPI. After an upload succeeds, the UI should show the document’s name and `doc_id`, and let the user query that document or the full shared collection.
 
 ## Evaluation
 
 Add representative questions and expected evidence to `eval/questions.json`, then run:
 
 ```powershell
-python eval/run_eval.py
+uv run python eval/run_eval.py
 ```
 
-Evaluate answer correctness, citation accuracy, and whether the assistant abstains when the document does not support an answer.
-
+Review answer correctness, citation accuracy, document filtering by `doc_id`, upload validation behavior, and whether the assistant abstains when the documents do not support an answer.
