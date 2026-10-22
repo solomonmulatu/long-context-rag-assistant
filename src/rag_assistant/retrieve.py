@@ -1,0 +1,47 @@
+from pathlib import Path
+from typing import List
+
+from langchain_chroma import Chroma
+from langchain_core.documents import Document
+from langchain_openai import OpenAIEmbeddings
+
+from rag_assistant.config import settings
+
+
+class Retrieve:
+
+    @staticmethod
+    def check_db_store(
+            persist_directory: str = settings.chroma_persist_directory,
+    ) -> bool:
+        """Return True if the Chroma collection contains records."""
+        if not Path(persist_directory).is_dir():
+            print("Vector store directory does not exist.")
+            return False
+
+        vectorstore = Chroma(
+            persist_directory=persist_directory,
+            collection_name="rag_assistant",
+        )
+
+        count = vectorstore._collection.count()
+        print(f"Found {count} records in the vector store.")
+        return count > 0
+
+    @staticmethod
+    def retrieve_relevant_chunks(query:str)->List[Document]:
+        persist_directory = settings.chroma_persist_directory
+        embedding_model = OpenAIEmbeddings(
+            model=settings.openai_embedding_model,
+            api_key=settings.openai_api_key,
+        )
+
+        db= Chroma(
+            collection_name="rag_assistant",
+            persist_directory=persist_directory,
+            embedding_function=embedding_model,
+        )
+
+        retriever = db.as_retriever(search_kwargs={"k": 5})
+        chunks = retriever.invoke(query)
+        return chunks

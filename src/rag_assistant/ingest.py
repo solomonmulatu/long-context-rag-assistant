@@ -12,6 +12,7 @@ from unstructured.partition.pdf import partition_pdf
 
 from rag_assistant.config import settings
 from rag_assistant.generate import Generate
+from rag_assistant.retrieve import Retrieve
 
 
 class ChunkContent(TypedDict):
@@ -212,23 +213,7 @@ class Ingest:
 
 
 
-    @staticmethod
-    def check_db_store(
-            persist_directory: str = settings.chroma_persist_directory,
-    ) -> bool:
-        """Return True if the Chroma collection contains records."""
-        if not Path(persist_directory).is_dir():
-            print("Vector store directory does not exist.")
-            return False
 
-        vectorstore = Chroma(
-            persist_directory=persist_directory,
-            collection_name="rag_assistant",
-        )
-
-        count = vectorstore._collection.count()
-        print(f"Found {count} records in the vector store.")
-        return count > 0
 
     @staticmethod
     def run_complete_ingestion_pipeline(pdf_path: str | Path) -> Chroma:
@@ -242,7 +227,7 @@ class Ingest:
             api_key=settings.openai_api_key,
         )
 
-        if Ingest.check_db_store(persist_directory):
+        if Retrieve.check_db_store(persist_directory):
             print("Database already contains data. Loading it.")
             return Chroma(
                 collection_name="rag_assistant",

@@ -4,6 +4,7 @@ from fastapi import FastAPI
 
 from rag_assistant.generate import Generate
 from rag_assistant.ingest import Ingest
+from rag_assistant.retrieve import Retrieve
 
 app = FastAPI()
 
@@ -28,12 +29,9 @@ def ingest_document():
 
 @app.get("/query")
 def query_document( query: str | None = None):
-    project_root = Path(__file__).resolve().parents[2]
-    pdf_path = project_root / "data" / "lost-in-the-middle.pdf"
 
-    db = Ingest.run_complete_ingestion_pipeline(pdf_path)
-    retriever = db.as_retriever(search_kwargs={"k": 5})
-    chunks = retriever.invoke(query)
+    chunks=Retrieve.retrieve_relevant_chunks(query)
+
     response=Generate.generate_final_answer(chunks,query)
 
     return response
