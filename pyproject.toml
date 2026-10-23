@@ -13,6 +13,8 @@ dependencies = [
     "unstructured[pdf]",
     "python-dotenv",
     "pydantic-settings",
+    "uuid",
+    "pypdf"
 ]
 
 [build-system]

@@ -96,7 +96,7 @@ class Ingest:
         return content_data
 
     @staticmethod
-    def summarise_chunks(chunks: List[Element]) -> List[Document]:
+    def summarise_chunks(chunks: List[Element],doc_id:str,file_name:str) -> List[Document]:
         """Process chunks and create LangChain documents with AI summaries."""
         documents: list[Document] = []
         total_chunks = len(chunks)
@@ -130,6 +130,8 @@ class Ingest:
 
             chunk_metadata = getattr(chunk, "metadata", None)
             metadata = {
+                "doc_id":doc_id,
+                "filename":file_name,
                 "chunk_index": index,
                 "content_types": json.dumps(content["types"]),
                 "original_content": json.dumps({
@@ -216,7 +218,7 @@ class Ingest:
 
 
     @staticmethod
-    def run_complete_ingestion_pipeline(pdf_path: str | Path) -> Chroma:
+    def run_complete_ingestion_pipeline(pdf_path: str | Path,doc_id: str,file_name:str) -> Chroma:
         """Run the complete RAG ingestion pipeline."""
         print("Starting RAG ingestion pipeline")
         print("=" * 50)
@@ -227,17 +229,10 @@ class Ingest:
             api_key=settings.openai_api_key,
         )
 
-        if Retrieve.check_db_store(persist_directory):
-            print("Database already contains data. Loading it.")
-            return Chroma(
-                collection_name="rag_assistant",
-                persist_directory=persist_directory,
-                embedding_function=embedding_model,
-            )
 
         elements = Ingest.partition_document(pdf_path)
         chunks = Ingest.create_chunks_by_title(elements)
-        documents = Ingest.summarise_chunks(chunks)
+        documents = Ingest.summarise_chunks(chunks,doc_id,file_name)
 
         vectorstore = Ingest.create_vector_store(
             documents,
