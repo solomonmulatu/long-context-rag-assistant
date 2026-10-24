@@ -70,7 +70,7 @@ async def upload_pdf(file: UploadFile = File(...)):
         )
 
     doc_id = str(uuid.uuid4())
-    temp_pdf_path = UPLOAD_TEMP_DIR / f"{doc_id}-{filename}.pdf"
+    temp_pdf_path = UPLOAD_TEMP_DIR / f"{doc_id}-{filename}"
 
     DOCUMENT_STATUS_DB[doc_id] = {
         "doc_id": doc_id,
@@ -194,3 +194,9 @@ def get_document_status(doc_id: str):
             detail="Document ID not found.",
         )
     return doc_info
+
+
+@app.get('/documents')
+def get_all_documents():
+    """Retrieve all ingested documents."""
+    return Retrieve.list_indexed_documents()

@@ -96,7 +96,7 @@ class Ingest:
         return content_data
 
     @staticmethod
-    def summarise_chunks(chunks: List[Element],doc_id:str,file_name:str) -> List[Document]:
+    def summarise_chunks(chunks: List[Element], doc_id: str, file_name: str) -> List[Document]:
         """Process chunks and create LangChain documents with AI summaries."""
         documents: list[Document] = []
         total_chunks = len(chunks)
@@ -130,8 +130,8 @@ class Ingest:
 
             chunk_metadata = getattr(chunk, "metadata", None)
             metadata = {
-                "doc_id":doc_id,
-                "filename":file_name,
+                "doc_id": doc_id,
+                "filename": file_name,
                 "chunk_index": index,
                 "content_types": json.dumps(content["types"]),
                 "original_content": json.dumps({
@@ -161,28 +161,44 @@ class Ingest:
             chunks: list[Document],
             filename: str | Path = "chunks_export.json",
     ) -> list[dict]:
-        """Export processed chunks and their metadata to a JSON file."""
+
+        path = Path(filename)
+
         export_data = []
 
         for index, doc in enumerate(chunks, start=1):
-            metadata = dict(doc.metadata)
+           metadata = dict(doc.metadata)
 
-            original_content = metadata.get("original_content", "{}")
-            if isinstance(original_content, str):
-                original_content = json.loads(original_content)
+           original_content = metadata.get("original_content", {})
+           if isinstance(original_content, str):
+               original_content = json.loads(original_content)
 
-            metadata["original_content"] = original_content
+           metadata["original_content"] = original_content
 
-            export_data.append({
-                "chunk_id": index,
-                "enhanced_content": doc.page_content,
-                "metadata": metadata,
-            })
+           doc_id = metadata.get("doc_id", "unknown")
+           chunk_index = metadata.get("chunk_index", index)
 
-        with open(filename, "w", encoding="utf-8") as file:
-            json.dump(export_data, file, indent=2, ensure_ascii=False)
+           export_data.append({
+              "chunk_id": f"{doc_id}:{chunk_index}",
+              "enhanced_content": doc.page_content,
+              "metadata": metadata,
+          })
 
-        print(f"Exported {len(export_data)} chunks to {filename}")
+        if path.exists():
+           with path.open("r", encoding="utf-8") as file:
+               data = json.load(file)
+
+           if not isinstance(data, list):
+               raise ValueError(f"{path} must contain a JSON list.")
+        else:
+           data = []
+
+        data.extend(export_data)
+
+        with path.open("w", encoding="utf-8") as file:
+           json.dump(data, file, indent=2, ensure_ascii=False)
+
+        print(f"Exported {len(export_data)} chunks to {path}")
         return export_data
 
     @staticmethod
@@ -190,35 +206,26 @@ class Ingest:
             documents: list[Document],
             persist_directory: str = settings.chroma_persist_directory,
     ) -> Chroma:
-        """Create OpenAI embeddings and store documents in persistent Chroma."""
         if not documents:
-            raise ValueError("Cannot create a vector store with no documents.")
-
-        Path(persist_directory).mkdir(parents=True, exist_ok=True)
-
-        print("Creating embeddings and storing documents in Chroma...")
+            raise ValueError("Cannot store an empty document.")
 
         embedding_model = OpenAIEmbeddings(
-            model=settings.openai_embedding_model
+            model=settings.openai_embedding_model,
+            api_key=settings.openai_api_key,
         )
 
-        vectorstore = Chroma.from_documents(
-            documents=documents,
-            embedding=embedding_model,
-            persist_directory=persist_directory,
+        vectorstore = Chroma(
             collection_name="rag_assistant",
+            persist_directory=persist_directory,
+            embedding_function=embedding_model,
             collection_metadata={"hnsw:space": "cosine"},
         )
 
-        print(f"Vector store created at {persist_directory}")
+        vectorstore.add_documents(documents)
         return vectorstore
 
-
-
-
-
     @staticmethod
-    def run_complete_ingestion_pipeline(pdf_path: str | Path,doc_id: str,file_name:str) -> Chroma:
+    def run_complete_ingestion_pipeline(pdf_path: str | Path, doc_id: str, file_name: str) -> Chroma:
         """Run the complete RAG ingestion pipeline."""
         print("Starting RAG ingestion pipeline")
         print("=" * 50)
@@ -229,10 +236,9 @@ class Ingest:
             api_key=settings.openai_api_key,
         )
 
-
         elements = Ingest.partition_document(pdf_path)
         chunks = Ingest.create_chunks_by_title(elements)
-        documents = Ingest.summarise_chunks(chunks,doc_id,file_name)
+        documents = Ingest.summarise_chunks(chunks, doc_id, file_name)
 
         vectorstore = Ingest.create_vector_store(
             documents,
@@ -242,5 +248,3 @@ class Ingest:
 
         print("Ingestion pipeline completed successfully")
         return vectorstore
-
-
