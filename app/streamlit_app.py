@@ -41,6 +41,7 @@ def show_api_error(exc: requests.RequestException) -> None:
 st.set_page_config(page_title="RAG Assistant", page_icon="📚")
 st.title("📚 PDF RAG Assistant")
 st.caption("Upload PDFs and ask questions grounded in their contents.")
+st.info("Uploaded PDFs are shared with everyone using this demo.")
 
 # Show upload success after the app reruns and refreshes the document list.
 if notice := st.session_state.pop("upload_notice", None):

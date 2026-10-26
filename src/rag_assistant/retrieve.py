@@ -29,7 +29,10 @@ class Retrieve:
         return count > 0
 
     @staticmethod
-    def retrieve_relevant_chunks(query:str)->List[Document]:
+    def retrieve_relevant_chunks(
+            query: str,
+            doc_id: str | None = None,
+    ) -> List[Document]:
         persist_directory = settings.chroma_persist_directory
         embedding_model = OpenAIEmbeddings(
             model=settings.openai_embedding_model,
@@ -42,7 +45,11 @@ class Retrieve:
             embedding_function=embedding_model,
         )
 
-        retriever = db.as_retriever(search_kwargs={"k": 5})
+        search_kwargs = {"k": 5}
+        if doc_id:
+            search_kwargs["filter"] = {"doc_id": doc_id}
+
+        retriever = db.as_retriever(search_kwargs=search_kwargs)
         chunks = retriever.invoke(query)
         return chunks
 

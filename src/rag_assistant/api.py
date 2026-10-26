@@ -39,9 +39,9 @@ async def root():
 
 
 @app.get("/query")
-def query_document( query: str | None = None):
+def query_document(query: str | None = None, doc_id: str | None = None):
 
-    chunks=Retrieve.retrieve_relevant_chunks(query)
+    chunks=Retrieve.retrieve_relevant_chunks(query, doc_id=doc_id)
 
     response=Generate.generate_final_answer(chunks,query)
 

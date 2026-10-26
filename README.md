@@ -2,22 +2,22 @@
 
 A retrieval-augmented generation (RAG) assistant that answers questions about user-uploaded PDFs and cites the source passages used.
 
-## What it does
+## Features
 
-- Lets users upload PDFs through the Streamlit interface.
-- Validates uploads before processing: PDF format, maximum file size of 10 MB, and maximum page count of 50. Encrypted or corrupt PDFs are rejected with a clear error.
-- Parses PDFs with Unstructured and Poppler. Tesseract OCR can be enabled for scanned documents; if OCR is disabled and no text is extracted, the app asks the user to upload a text-based PDF.
-- Cleans and chunks extracted content, preserving citation metadata.
-- Assigns each PDF a unique `doc_id` and stores it with every chunk.
-- Embeds chunks with the OpenAI Embeddings API and stores them in a shared Chroma collection.
-- Lets users query one uploaded document or search across all uploaded documents.
-- Generates answers from retrieved excerpts, with source citations. It abstains when the documents do not provide enough evidence.
+- Upload and index PDF documents from the Streamlit interface.
+- Validate uploads before processing: PDF format, maximum file size of 10 MB, and maximum page count of 50. Encrypted or corrupt PDFs are rejected with a clear error.
+- Parse PDFs with Unstructured and Poppler. Tesseract OCR can be enabled for scanned documents; if OCR is disabled and no text is extracted, the app asks the user to upload a text-based PDF.
+- Clean and chunk extracted content while preserving citation metadata.
+- Assign each PDF a unique `doc_id` and store it with every chunk.
+- Embed chunks with the OpenAI Embeddings API and store them in a shared Chroma collection.
+- Browse indexed PDFs and query one selected document or all uploaded documents.
+- Generate cited answers from retrieved excerpts, and abstain when the documents do not provide enough evidence.
+
+![Demo of uploading and indexing a PDF](docs/demo-upload.gif)
 
 ## Shared knowledge base
 
-Uploaded PDFs and their indexed chunks are stored in a **shared knowledge base**. Visitors can query documents uploaded by other visitors. The app does not provide per-user or per-session isolation, so the UI should tell users that uploads are shared.
-
-Documents remain available until removed or expired under the configured retention policy. Removing a document must delete its vectors from Chroma by `doc_id` and delete its stored PDF if one is retained.
+Uploaded PDFs and their indexed chunks are stored in a **shared knowledge base**. Visitors can query documents uploaded by other visitors; the app does not provide per-user or per-session isolation. The original temporary upload file is removed after processing, while indexed chunks remain in Chroma until they are manually removed.
 
 ## Non-goals
 
@@ -97,7 +97,9 @@ rag-assistant/
 ├── tests/
 ├── docs/
 │   ├── design.md
-│   └── rag-architecture.png
+│   ├── rag-architecture.png
+│   └── demo-upload.gif
+├── CHANGELOG.md
 ├── .env.example
 ├── .gitignore
 ├── pyproject.toml
