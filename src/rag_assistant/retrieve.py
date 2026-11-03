@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import List
 
 from langchain_chroma import Chroma
+from langchain_community.retrievers import BM25Retriever
 from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
 
@@ -49,8 +50,19 @@ class Retrieve:
         if doc_id:
             search_kwargs["filter"] = {"doc_id": doc_id}
 
-        retriever = db.as_retriever(search_kwargs=search_kwargs)
-        chunks = retriever.invoke(query)
+        vector_retriever = db.as_retriever(search_kwargs=search_kwargs)
+
+        # load docs from Chroma (optionally filtered by doc_id)
+        stored = db.get(where={"doc_id": doc_id} if doc_id else None, include=["documents", "metadatas"])
+
+        docs = [
+            Document(page_content=text, metadata=meta or {})
+            for text, meta in zip(stored["documents"], stored["metadatas"])
+            if text
+        ]
+
+        bm25_retriever = BM25Retriever.from_documents(docs, k=5)
+        chunks = vector_retriever.invoke(query)
         return chunks
 
     @staticmethod

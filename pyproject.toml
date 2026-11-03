@@ -14,7 +14,8 @@ dependencies = [
     "python-dotenv",
     "pydantic-settings",
     "uuid",
-    "pypdf"
+    "pypdf",
+    "rank_bm25"
 ]
 
 [build-system]
