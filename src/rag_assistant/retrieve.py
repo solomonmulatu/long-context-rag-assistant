@@ -2,6 +2,7 @@ from pathlib import Path
 from typing import List
 
 from langchain_chroma import Chroma
+from langchain_classic.retrievers import ensemble
 from langchain_community.retrievers import BM25Retriever
 from langchain_core.documents import Document
 from langchain_openai import OpenAIEmbeddings
@@ -62,7 +63,12 @@ class Retrieve:
         ]
 
         bm25_retriever = BM25Retriever.from_documents(docs, k=5)
-        chunks = vector_retriever.invoke(query)
+        hybrid_retriever = ensemble.EnsembleRetriever(
+            retrievers=[vector_retriever, bm25_retriever],
+            weights=[0.7, 0.3]
+        )
+        chunks = hybrid_retriever.invoke(query)
+
         return chunks
 
     @staticmethod
