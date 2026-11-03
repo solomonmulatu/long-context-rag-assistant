@@ -62,6 +62,9 @@ class Retrieve:
             if text
         ]
 
+        if not docs:
+            return []
+
         bm25_retriever = BM25Retriever.from_documents(docs, k=5)
         hybrid_retriever = ensemble.EnsembleRetriever(
             retrievers=[vector_retriever, bm25_retriever],
