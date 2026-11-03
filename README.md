@@ -10,6 +10,7 @@ A retrieval-augmented generation (RAG) assistant that answers questions about us
 - Clean and chunk extracted content while preserving citation metadata.
 - Assign each PDF a unique `doc_id` and store it with every chunk.
 - Embed chunks with the OpenAI Embeddings API and store them in a shared Chroma collection.
+- Retrieve with hybrid search: Chroma vector search and BM25 keyword search, combined with LangChain EnsembleRetriever (`weights=[0.7, 0.3]`, vector then BM25). Filter by `doc_id` when a single PDF is selected.
 - Browse indexed PDFs and query one selected document or all uploaded documents.
 - Generate cited answers from retrieved excerpts, and abstain when the documents do not provide enough evidence.
 
@@ -38,6 +39,8 @@ Uploaded PDFs and their indexed chunks are stored in a **shared knowledge base**
 - **File type detection:** `libmagic`, where required by the platform and Unstructured configuration
 - **Embeddings:** OpenAI Embeddings API, such as `text-embedding-3-small`
 - **Vector store:** Chroma
+- **Lexical retrieval:** BM25
+- **Retrieval fusion:** LangChain EnsembleRetriever (vector `0.7`, BM25 `0.3`)
 - **Language model:** OpenAI API
 - **API:** FastAPI
 - **UI:** Streamlit
@@ -66,9 +69,10 @@ Each PDF gets a unique `doc_id`. Every chunk retains that ID and its citation me
 Question + optional doc_id
     → Streamlit UI
     → FastAPI
-    → OpenAI query embedding
-    → Chroma top-k retrieval, filtered by doc_id when selected
-    → Optional reranking
+    → Parallel retrieval (same doc_id filter on both sides when selected)
+        → OpenAI query embedding → Chroma vector retriever
+        → BM25 retriever (lexical)
+    → EnsembleRetriever (weights 0.7 vector / 0.3 BM25) → fused results
     → Grounded prompt with citation metadata
     → OpenAI LLM
     → Answer with citations, or abstention
@@ -82,7 +86,7 @@ See [`docs/design.md`](docs/design.md) for chunking, retrieval, prompt, and abst
 rag-assistant/
 ├── src/rag_assistant/
 │   ├── ingest.py        # Validate, parse, chunk, embed, and store PDFs
-│   ├── retrieve.py      # Retrieve chunks from the shared Chroma collection
+│   ├── retrieve.py      # Hybrid EnsembleRetriever (vector + BM25)
 │   ├── generate.py      # Build grounded prompts and generate cited answers
 │   ├── config.py        # Application settings and environment variables
 │   ├── schemas.py       # API request and response models
@@ -173,4 +177,4 @@ Add representative questions and expected evidence to `eval/questions.json`, the
 uv run python eval/run_eval.py
 ```
 
-Review answer correctness, citation accuracy, document filtering by `doc_id`, upload validation behavior, and whether the assistant abstains when the documents do not support an answer.
+Review answer correctness, citation accuracy, document filtering by `doc_id`, upload validation behavior, hybrid retrieval on both keyword-heavy and semantic questions, and whether the assistant abstains when the documents do not support an answer.

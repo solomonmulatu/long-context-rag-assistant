@@ -2,7 +2,7 @@
 
 ## Architecture and data scope
 
-The app has a Streamlit UI and a FastAPI backend. Users upload PDFs through the UI, and the API validates, parses, chunks, embeds, and stores them in a **shared Chroma collection**. Every visitor can query any uploaded document.
+The app has a Streamlit UI and a FastAPI backend. Users upload PDFs through the UI, and the API validates, parses, chunks, embeds, and stores them in a **shared Chroma collection**. At query time, retrieval is **hybrid**: Chroma vector search plus BM25, fused with LangChain EnsembleRetriever. Every visitor can query any uploaded document.
 
 Each PDF receives a unique `doc_id`. Store it with every chunk, along with citation metadata:
 
@@ -11,7 +11,7 @@ Each PDF receives a unique `doc_id`. Store it with every chunk, along with citat
 - `page`
 - `section`, when available
 
-Users can search all documents or select one PDF. Selecting a PDF filters retrieval by its `doc_id`.
+Users can search all documents or select one PDF. Selecting a PDF filters both the vector and BM25 retrievers by that `doc_id`.
 
 The UI should tell users that uploaded documents are added to a shared knowledge base and may be available to other visitors.
 
@@ -38,11 +38,12 @@ Save uploads temporarily during processing and remove the temporary file afterwa
 
 ## Retrieval
 
-- Use the same OpenAI embedding model for document chunks and user questions.
-- Retrieve **top-k = 5** chunks from the shared Chroma collection.
-- If a user selected one PDF, filter retrieval by its `doc_id`; otherwise, search across all documents.
-- Keep reranking optional. If enabled, rerank the retrieved candidates and pass the best few chunks to the answer prompt.
-- Preserve each chunk's citation metadata through retrieval and reranking.
+- Use the same OpenAI embedding model for document chunks and user questions (dense / vector side).
+- Build two retrievers over the indexed chunks: a **Chroma vector retriever** and a **BM25** lexical retriever.
+- If a user selected one PDF, apply the same **`doc_id` filter** on both retrievers; otherwise, search across all documents.
+- Combine results with LangChain **`EnsembleRetriever`**, `weights=[0.7, 0.3]` (vector then BM25). Vector-heavy weights favor paraphrased questions; BM25 still helps with exact terms, names, and acronyms.
+- Pass about **top-k = 5** fused chunks into the answer prompt as an initial setting. Tune with keyword-heavy and semantic eval questions.
+- Preserve each chunk's citation metadata (`doc_id`, `source`, `page`, `section`) through both retrievers and fusion.
 
 ## Answer prompt
 
