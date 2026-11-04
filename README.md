@@ -1,169 +1,154 @@
 # PDF RAG Assistant
 
-A retrieval-augmented generation (RAG) assistant that answers questions about user-uploaded PDFs and cites the source passages used.
+Ask questions about user-uploaded PDFs and get answers grounded in retrieved passages with citations. A Streamlit UI talks to a FastAPI service that validates and indexes PDFs into a shared Chroma collection, retrieves with vector, BM25, or hybrid search, and generates cited answers (or abstains when evidence is weak).
 
-## Features
+> **Portfolio demo.** Run the app locally with the Quickstart below. This README and [docs/DESIGN.md](docs/DESIGN.md) match the current implementation.
 
-- Upload and index PDF documents from the Streamlit interface.
-- Validate uploads before processing: PDF format, maximum file size of 10 MB, and maximum page count of 50. Encrypted or corrupt PDFs are rejected with a clear error.
-- Parse PDFs with Unstructured and Poppler. Tesseract OCR can be enabled for scanned documents; if OCR is disabled and no text is extracted, the app asks the user to upload a text-based PDF.
-- Clean and chunk extracted content while preserving citation metadata.
-- Assign each PDF a unique `doc_id` and store it with every chunk.
-- Embed chunks with the OpenAI Embeddings API and store them in a shared Chroma collection.
-- Browse indexed PDFs and query one selected document or all uploaded documents.
-- Generate cited answers from retrieved excerpts, and abstain when the documents do not provide enough evidence.
+## Live demo
 
 ![Demo of uploading and indexing a PDF](docs/demo-upload.gif)
 
-## Shared knowledge base
+Hosted App/API links are not published yet. After you deploy (see [Deploy](#deploy-render--streamlit-cloud)), add:
 
-Uploaded PDFs and their indexed chunks are stored in a **shared knowledge base**. Visitors can query documents uploaded by other visitors; the app does not provide per-user or per-session isolation. The original temporary upload file is removed after processing, while indexed chunks remain in Chroma until they are manually removed.
+- **App (Streamlit Community Cloud):** `https://<your-app>.streamlit.app/`
+- **API (FastAPI on Render):** `https://<your-api>.onrender.com/`
+- **API docs:** `https://<your-api>.onrender.com/docs`
 
-## Non-goals
+Until then, use Quickstart locally. Cold starts on free Streamlit/Render tiers can make the first request slow.
 
-- **Authentication or role-based access control:** This demo does not identify individual users or provide private document collections.
-- **Model fine-tuning:** Uses existing language models without training them on uploaded documents.
-- **Web search or external knowledge retrieval:** Answers are grounded in the shared document collection only.
-- **Document editing:** Users can query documents but cannot edit or annotate them.
-- **Autonomous agents or external tool execution:** The assistant answers questions and does not take actions outside the RAG workflow.
-- **Guaranteed answers to every question:** The assistant may decline when retrieved context does not provide enough evidence.
-- **Production-scale infrastructure:** Focuses on demonstrating RAG, citation accuracy, and document question answering.
+## What it does
 
-## Tech stack
+- Upload and index PDF documents from the Streamlit interface.
+- Validate uploads before processing: PDF only, max **10 MB**, max **50 pages**; reject encrypted or corrupt files with a clear error.
+- Parse PDFs with Unstructured and Poppler; optional Tesseract OCR for scanned pages.
+- Chunk content while preserving citation metadata (`doc_id`, source, page, section).
+- Embed chunks with OpenAI and store them in a **shared** Chroma collection.
+- Choose retriever mode: **vector**, **BM25**, or **hybrid** (default; EnsembleRetriever weights `0.7` / `0.3`).
+- Filter by `doc_id` when querying one PDF, or search the full shared collection.
+- Generate cited answers from retrieved excerpts, and abstain when the documents do not support an answer.
+- Evaluate behavior with curated questions in `eval/`.
 
-- **Language:** Python 3.12+
-- **Document parsing:** Unstructured Python library
-- **PDF utilities:** Poppler (`poppler-utils`)
-- **OCR:** Tesseract (`tesseract-ocr`), optional for scanned PDFs
-- **File type detection:** `libmagic`, where required by the platform and Unstructured configuration
-- **Embeddings:** OpenAI Embeddings API, such as `text-embedding-3-small`
-- **Vector store:** Chroma
-- **Language model:** OpenAI API
-- **API:** FastAPI
-- **UI:** Streamlit
-- **Python environment and dependencies:** `uv`
+## Example questions
+
+Using a paper such as *Lost in the Middle* (see `eval/documents/`):
+
+- What is the lost-in-the-middle effect?
+- Where in the context do models perform best on relevant information?
+- What does the paper say about performance when evidence appears in the middle?
 
 ## Architecture
 
-### PDF upload and ingestion
-
-```text
-User uploads PDF in Streamlit
-    → FastAPI validates file type, size, page count, and readability
-    → Unstructured parses PDF (Poppler as needed)
-    → Tesseract OCR for scanned PDFs, when enabled
-    → Clean and chunk content
-    → Attach doc_id, source, page, and section metadata
-    → OpenAI embeddings
-    → Shared Chroma collection
+```mermaid
+flowchart LR
+  User[User] --> UI[Streamlit]
+  UI -->|POST /upload| API[FastAPI]
+  UI -->|"GET /query"| API
+  API --> Ingest[Validate parse chunk embed]
+  Ingest --> Chroma[(Chroma shared KB)]
+  API --> Ret[Retriever vector BM25 or hybrid]
+  Ret --> Chroma
+  Ret --> Gen[Grounded LLM answer]
+  Gen --> UI
 ```
 
-Each PDF gets a unique `doc_id`. Every chunk retains that ID and its citation metadata. The temporary upload file is removed after processing unless the app is configured to retain the original PDF.
+Stack: Unstructured and Poppler (optional Tesseract), OpenAI embeddings and chat, Chroma, BM25, LangChain EnsembleRetriever, FastAPI, and Streamlit.
 
-### Question and answer
+See [docs/DESIGN.md](docs/DESIGN.md) for chunking, retrieval, prompts, and abstention details. See [docs/rag-architecture.png](docs/rag-architecture.png) for a static architecture diagram.
 
-```text
-Question + optional doc_id
-    → Streamlit UI
-    → FastAPI
-    → OpenAI query embedding
-    → Chroma top-k retrieval, filtered by doc_id when selected
-    → Optional reranking
-    → Grounded prompt with citation metadata
-    → OpenAI LLM
-    → Answer with citations, or abstention
+### API shape
+
+`POST /upload` — multipart PDF file.
+
+Success (`201`):
+
+```json
+{
+  "doc_id": "uuid",
+  "filename": "paper.pdf",
+  "status": "completed",
+  "pages": 12,
+  "chunks_stored": 40,
+  "error": null
+}
 ```
 
-See [`docs/design.md`](docs/design.md) for chunking, retrieval, prompt, and abstention choices. See [`docs/rag-architecture.png`](docs/rag-architecture.png) for the architecture diagram.
+`GET /query?query=<question>&doc_id=<optional>&retriever=hybrid`
 
-## Project structure
+Success:
 
-```text
-rag-assistant/
-├── src/rag_assistant/
-│   ├── ingest.py        # Validate, parse, chunk, embed, and store PDFs
-│   ├── retrieve.py      # Retrieve chunks from the shared Chroma collection
-│   ├── generate.py      # Build grounded prompts and generate cited answers
-│   ├── config.py        # Application settings and environment variables
-│   ├── schemas.py       # API request and response models
-│   └── api.py           # FastAPI upload, query, and document-management routes
-├── app/
-│   └── streamlit_app.py # UI that calls the FastAPI service
-├── data/                # Optional sample documents; check licensing before sharing
-├── uploads/             # Temporary/runtime uploads; do not commit
-├── eval/
-│   ├── questions.json   # Evaluation questions
-│   └── run_eval.py      # Evaluation runner
-├── tests/
-├── docs/
-│   ├── design.md
-│   ├── rag-architecture.png
-│   └── demo-upload.gif
-├── CHANGELOG.md
-├── .env.example
-├── .gitignore
-├── pyproject.toml
-├── uv.lock
-├── LICENSE
-└── README.md
+```json
+{
+  "answer": "Markdown answer with inline citations such as [S1].",
+  "citations": [
+    {"id": "S1", "source": "paper.pdf", "page": 7, "section": null}
+  ],
+  "abstained": false
+}
 ```
 
-## Getting started
+When evidence is missing, `abstained` is `true` and `citations` is empty.
 
-### Prerequisites
+Also available: `GET /` (health), `GET /documents`, `GET /documents/{doc_id}`.
 
-- Python 3.12+
-- `uv`
+## Requirements
+
+- Python 3.12 (see `requires-python` in `pyproject.toml`)
+- [`uv`](https://docs.astral.sh/uv/) for the environment
 - An OpenAI API key
-- Poppler installed and available on your system path
-- Tesseract installed if OCR for scanned PDFs is enabled
-- `libmagic` if required by your platform and Unstructured configuration
+- Poppler on `PATH`
+- Tesseract if OCR for scanned PDFs is enabled
+- `libmagic` where required by Unstructured on your platform
 
-### Install dependencies
+## Quickstart
 
-From the project root in PowerShell:
+### 1. Clone and install
 
 ```powershell
+git clone <your-repository-url>
+cd rag-assistant
 uv sync
 ```
 
-Poppler, Tesseract, and `libmagic` are system dependencies; `uv sync` does not install them.
+Poppler, Tesseract, and `libmagic` are system packages; `uv sync` does not install them.
 
-### Configure environment variables
-
-Copy the example file and add your API key to `.env`:
+### 2. Configure environment
 
 ```powershell
 Copy-Item .env.example .env
 ```
 
-Example `.env.example`:
+Set at least:
 
-```dotenv
+```env
 OPENAI_API_KEY=replace-me
 OPENAI_CHAT_MODEL=gpt-4o
 OPENAI_EMBEDDING_MODEL=text-embedding-3-small
-CHROMA_PERSIST_DIRECTORY=chroma_data
+CHROMA_PERSIST_DIRECTORY=./chroma_data
 API_BASE_URL=http://127.0.0.1:8000
 ```
 
-Keep `.env` and API keys out of version control. Commit `.env.example` with placeholders only. Resolve the Chroma path relative to the project root so it does not depend on the directory from which the app is launched.
+Streamlit reads `API_BASE_URL` (base host only, not `/query`). On Streamlit Cloud, put the same key in Secrets pointing at your Render API. Never commit `.env` or API keys.
 
-### Run the application
-
-Start the FastAPI backend in one terminal:
+### 3. Start the API and UI
 
 ```powershell
 uv run uvicorn rag_assistant.api:app --reload
 ```
 
-Start the Streamlit UI in another terminal:
+In another window:
 
 ```powershell
 uv run streamlit run app/streamlit_app.py
 ```
 
-The Streamlit app sends uploads and questions to FastAPI. After an upload succeeds, the UI should show the document’s name and `doc_id`, and let the user query that document or the full shared collection.
+Open the Streamlit URL printed in the terminal. FastAPI docs are at `http://127.0.0.1:8000/docs`.
+
+## Safety
+
+- Uploads are validated for type, size, page count, PDF header, and encryption before indexing.
+- Temporary upload files are deleted after processing.
+- Answers are prompted to use **only** retrieved excerpts; the model is instructed to abstain rather than invent facts or citations.
+- The knowledge base is **shared**: any visitor can query documents uploaded by others. There is no per-user isolation or authentication.
 
 ## Evaluation
 
@@ -173,4 +158,103 @@ Add representative questions and expected evidence to `eval/questions.json`, the
 uv run python eval/run_eval.py
 ```
 
-Review answer correctness, citation accuracy, document filtering by `doc_id`, upload validation behavior, and whether the assistant abstains when the documents do not support an answer.
+Review answer correctness, citation accuracy, `doc_id` filtering, upload validation, hybrid retrieval on keyword and semantic questions, and abstention when documents do not support an answer.
+
+| Experiment | Notes |
+|---|---|
+| To be measured | Fill in after running the eval runner against indexed sample PDFs. |
+
+## Project structure
+
+```text
+rag-assistant/
+|-- src/rag_assistant/
+|   |-- config.py          # Settings from .env
+|   |-- ingest.py          # Validate, parse, chunk, embed, store PDFs
+|   |-- retrieve.py        # Vector, BM25, and hybrid EnsembleRetriever
+|   |-- generate.py        # Grounded prompts and cited answers
+|   `-- api.py             # FastAPI upload, query, documents routes
+|-- app/
+|   `-- streamlit_app.py   # UI that calls the FastAPI service
+|-- eval/
+|   |-- questions.json
+|   |-- run_eval.py
+|   `-- documents/         # Sample PDFs for evaluation
+|-- tests/
+|   |-- test_upload.py
+|   `-- test_retrieve.py
+|-- docs/
+|   |-- DESIGN.md          # Current architecture notes
+|   |-- rag-architecture.png
+|   `-- demo-upload.gif
+|-- uploads/               # Runtime temp uploads; do not commit
+|-- db_v1/                 # Local Chroma persistence; do not commit secrets
+|-- .env.example
+|-- CHANGELOG.md
+|-- pyproject.toml
+|-- uv.lock
+|-- LICENSE
+`-- README.md
+```
+
+## Deploy (Render + Streamlit Cloud)
+
+Same hosting pattern as talk-to-data (no Docker):
+
+- **UI:** Streamlit Community Cloud
+- **API:** FastAPI on Render (native Python / uvicorn)
+- **Index:** Chroma on the API service disk (ephemeral on the free tier — uploads can be lost on redeploy or disk wipe)
+
+### 1. Deploy the API on Render
+
+1. Create a Render **Web Service** from this repo.
+2. Runtime: **Python**. Use **3.12** (`requires-python = ">=3.12,<3.13"`).
+3. Build: `pip install .` or `uv sync --frozen`
+4. Start:
+   - `uvicorn rag_assistant.api:app --host 0.0.0.0 --port $PORT`
+   - Do **not** use `--reload` (binds localhost and fails Render port checks).
+5. Set environment variables:
+   - `OPENAI_API_KEY`
+   - `OPENAI_CHAT_MODEL` (e.g. `gpt-4o`)
+   - `OPENAI_EMBEDDING_MODEL` (e.g. `text-embedding-3-small`)
+   - `CHROMA_PERSIST_DIRECTORY=./chroma_data`
+6. Confirm `GET /` returns the health message and `/docs` loads.
+
+PDF parsing needs **Poppler** on the API host (and **Tesseract** if you enable OCR). Install those as system packages on the Render environment if uploads fail to parse.
+
+### 2. Deploy the UI on Streamlit Community Cloud
+
+1. Deploy from this repo with main file `app/streamlit_app.py`.
+2. In **Secrets**, set:
+   - `API_BASE_URL=https://<your-api>.onrender.com`
+3. Open the Streamlit URL, upload a small PDF, and ask a question.
+
+Do not put OpenAI keys in Streamlit Secrets unless the UI calls OpenAI directly (it does not; the API holds the keys).
+
+### 3. After deploy
+
+Update the [Live demo](#live-demo) bullets with your real App and API URLs.
+
+Free Streamlit/Render instances sleep when idle; the first request after idle can be slow. On free Render, treat the Chroma index as temporary.
+
+## Limitations and future work
+
+- No authentication or private document collections (shared knowledge base).
+- No model fine-tuning, web search, document editing, or autonomous tool use.
+- Answers may abstain when retrieval does not support a claim.
+- Not production-scale infrastructure; focused on RAG, citations, and PDF Q&A.
+- On free Render, Chroma persistence is ephemeral; indexed PDFs may disappear after redeploy or disk reset.
+- Possible later work: fill Live demo URLs, Render persistent disk or a managed vector store, stronger retention/cleanup, and richer eval metrics.
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE). Review licenses for any sample PDFs under `eval/documents/` before redistributing them.
+
+## Acknowledgements
+
+- [LangChain](https://www.langchain.com/)
+- [Chroma](https://www.trychroma.com/)
+- [Unstructured](https://unstructured.io/)
+- [FastAPI](https://fastapi.tiangolo.com/)
+- [Streamlit](https://streamlit.io/)
+- [OpenAI](https://openai.com/)

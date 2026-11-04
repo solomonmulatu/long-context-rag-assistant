@@ -141,6 +141,15 @@ if documents:
             '',document_by_id[doc_id].get("filename", doc_id))
             ),
         )
+        selected_retriever = st.selectbox(
+            "Retriever",
+            options=["hybrid", "vector", "bm25"],
+            format_func=lambda mode: {
+                "hybrid": "Both (vector + BM25)",
+                "vector": "Vector",
+                "bm25": "BM25",
+            }[mode],
+        )
         question = st.text_area(
             "Your question",
             placeholder="What does the document say about...?",
@@ -152,7 +161,10 @@ if documents:
         if not question.strip():
             st.warning("Enter a question first.")
         else:
-            params = {"query": question.strip()}
+            params = {
+                "query": question.strip(),
+                "retriever": selected_retriever,
+            }
             if selected_doc_id is not None:
                 params["doc_id"] = selected_doc_id
 
