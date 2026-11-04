@@ -8,13 +8,7 @@ Ask questions about user-uploaded PDFs and get answers grounded in retrieved pas
 
 ![Demo of uploading and indexing a PDF](docs/demo-upload.gif)
 
-Hosted App/API links are not published yet. After you deploy (see [Deploy](#deploy-render--streamlit-cloud)), add:
-
-- **App (Streamlit Community Cloud):** `https://<your-app>.streamlit.app/`
-- **API (FastAPI on Render):** `https://<your-api>.onrender.com/`
-- **API docs:** `https://<your-api>.onrender.com/docs`
-
-Until then, use Quickstart locally. Cold starts on free Streamlit/Render tiers can make the first request slow.
+Run the API and Streamlit UI locally with the Quickstart below.
 
 ## What it does
 
@@ -127,7 +121,7 @@ CHROMA_PERSIST_DIRECTORY=./chroma_data
 API_BASE_URL=http://127.0.0.1:8000
 ```
 
-Streamlit reads `API_BASE_URL` (base host only, not `/query`). On Streamlit Cloud, put the same key in Secrets pointing at your Render API. Never commit `.env` or API keys.
+Streamlit reads `API_BASE_URL` (base host only, not `/query`), which should point at your local FastAPI server. Never commit `.env` or API keys.
 
 ### 3. Start the API and UI
 
@@ -197,54 +191,13 @@ rag-assistant/
 `-- README.md
 ```
 
-## Deploy (Render + Streamlit Cloud)
-
-Same hosting pattern as talk-to-data (no Docker):
-
-- **UI:** Streamlit Community Cloud
-- **API:** FastAPI on Render (native Python / uvicorn)
-- **Index:** Chroma on the API service disk (ephemeral on the free tier — uploads can be lost on redeploy or disk wipe)
-
-### 1. Deploy the API on Render
-
-1. Create a Render **Web Service** from this repo.
-2. Runtime: **Python**. Use **3.12** (`requires-python = ">=3.12,<3.13"`).
-3. Build: `pip install .` or `uv sync --frozen`
-4. Start:
-   - `uvicorn rag_assistant.api:app --host 0.0.0.0 --port $PORT`
-   - Do **not** use `--reload` (binds localhost and fails Render port checks).
-5. Set environment variables:
-   - `OPENAI_API_KEY`
-   - `OPENAI_CHAT_MODEL` (e.g. `gpt-4o`)
-   - `OPENAI_EMBEDDING_MODEL` (e.g. `text-embedding-3-small`)
-   - `CHROMA_PERSIST_DIRECTORY=./chroma_data`
-6. Confirm `GET /` returns the health message and `/docs` loads.
-
-PDF parsing needs **Poppler** on the API host (and **Tesseract** if you enable OCR). Install those as system packages on the Render environment if uploads fail to parse.
-
-### 2. Deploy the UI on Streamlit Community Cloud
-
-1. Deploy from this repo with main file `app/streamlit_app.py`.
-2. In **Secrets**, set:
-   - `API_BASE_URL=https://<your-api>.onrender.com`
-3. Open the Streamlit URL, upload a small PDF, and ask a question.
-
-Do not put OpenAI keys in Streamlit Secrets unless the UI calls OpenAI directly (it does not; the API holds the keys).
-
-### 3. After deploy
-
-Update the [Live demo](#live-demo) bullets with your real App and API URLs.
-
-Free Streamlit/Render instances sleep when idle; the first request after idle can be slow. On free Render, treat the Chroma index as temporary.
-
 ## Limitations and future work
 
 - No authentication or private document collections (shared knowledge base).
 - No model fine-tuning, web search, document editing, or autonomous tool use.
 - Answers may abstain when retrieval does not support a claim.
 - Not production-scale infrastructure; focused on RAG, citations, and PDF Q&A.
-- On free Render, Chroma persistence is ephemeral; indexed PDFs may disappear after redeploy or disk reset.
-- Possible later work: fill Live demo URLs, Render persistent disk or a managed vector store, stronger retention/cleanup, and richer eval metrics.
+- Possible later work: stronger document retention/cleanup controls, a managed vector store, and richer eval metrics.
 
 ## License
 

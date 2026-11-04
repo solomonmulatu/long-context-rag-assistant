@@ -34,3 +34,4 @@ db_v1
 .idea/
 .DS_Store
 Thumbs.db
+chunks_export.json
