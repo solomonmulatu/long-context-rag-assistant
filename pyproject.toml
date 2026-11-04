@@ -5,6 +5,7 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
     "fastapi",
     "uvicorn[standard]",
+    "python-multipart",
     "streamlit",
     "langchain",
     "langchain-community",
@@ -15,7 +16,7 @@ dependencies = [
     "pydantic-settings",
     "uuid",
     "pypdf",
-    "rank_bm25"
+    "rank_bm25",
 ]
 
 [build-system]

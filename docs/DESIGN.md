@@ -109,6 +109,14 @@ flowchart LR
 
 Document removal by `doc_id` (Chroma vectors and any retained original PDF) and retention policy for free hosting should stay explicit in the product UX when those controls are exposed.
 
+## Hosting (current demo target)
+
+- **UI:** Streamlit Community Cloud calling the API via `API_BASE_URL`.
+- **API:** FastAPI on Render with native `uvicorn` (`--host 0.0.0.0 --port $PORT`), same style as talk-to-data.
+- **Vector index:** Chroma on the Render service filesystem (`CHROMA_PERSIST_DIRECTORY`), not a managed vector database such as Pinecone or Supabase pgvector.
+- On free Render, treat Chroma as **ephemeral**: redeploys or disk wipes can clear the shared index. A persistent disk or external store is future work.
+- Poppler (and optional Tesseract) must be available on the API host for PDF parsing.
+
 ## Project structure
 
 ```text
@@ -144,7 +152,8 @@ rag-assistant/
 - Portfolio demo focused on RAG, citations, and PDF Q&A—not production multi-tenant hosting.
 - No authentication, private collections, fine-tuning, web search, or agent tool use.
 - Upload status lives partly in an in-memory map (`DOCUMENT_STATUS_DB`); process restarts lose that status view even if Chroma persists.
-- Hosted Live demo URLs are not published in the README yet.
+- Hosted Live demo URLs are not published in the README yet (placeholders under Live demo / Deploy).
+- Free-tier Chroma on Render is ephemeral; process restarts also clear in-memory upload status (`DOCUMENT_STATUS_DB`).
 - Evaluation harness exists; published metric tables are still to be filled after runs.
 
-Possible later work: deploy links, stronger retention/cleanup, richer eval metrics, and optional private per-session collections.
+Possible later work: published Live demo URLs, Render persistent disk or managed vectors, stronger retention/cleanup, richer eval metrics, and optional private per-session collections.
