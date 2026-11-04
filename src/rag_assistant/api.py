@@ -39,12 +39,23 @@ async def root():
 
 
 @app.get("/query")
-def query_document(query: str | None = None, doc_id: str | None = None):
+def query_document(
+    query: str | None = None,
+    doc_id: str | None = None,
+    retriever: str = "hybrid",
+):
+    if retriever not in {"vector", "bm25", "hybrid"}:
+        raise HTTPException(
+            status_code=422,
+            detail="retriever must be one of: vector, bm25, hybrid",
+        )
 
-    chunks=Retrieve.retrieve_relevant_chunks(query, doc_id=doc_id)
-
-    response=Generate.generate_final_answer(chunks,query)
-
+    chunks = Retrieve.retrieve_relevant_chunks(
+        query,
+        doc_id=doc_id,
+        retriever=retriever,
+    )
+    response = Generate.generate_final_answer(chunks, query)
     return response
 
 @app.post("/upload", status_code=201)

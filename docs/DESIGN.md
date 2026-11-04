@@ -2,7 +2,7 @@
 
 ## Architecture and data scope
 
-The app has a Streamlit UI and a FastAPI backend. Users upload PDFs through the UI, and the API validates, parses, chunks, embeds, and stores them in a **shared Chroma collection**. At query time, retrieval is **hybrid**: Chroma vector search plus BM25, fused with LangChain EnsembleRetriever. Every visitor can query any uploaded document.
+The app has a Streamlit UI and a FastAPI backend. Users upload PDFs through the UI, and the API validates, parses, chunks, embeds, and stores them in a **shared Chroma collection**. At query time, users can choose **vector**, **BM25**, or **hybrid** retrieval (default hybrid: Chroma plus BM25 fused with LangChain EnsembleRetriever). Every visitor can query any uploaded document.
 
 Each PDF receives a unique `doc_id`. Store it with every chunk, along with citation metadata:
 
@@ -39,11 +39,12 @@ Save uploads temporarily during processing and remove the temporary file afterwa
 ## Retrieval
 
 - Use the same OpenAI embedding model for document chunks and user questions (dense / vector side).
-- Build two retrievers over the indexed chunks: a **Chroma vector retriever** and a **BM25** lexical retriever.
-- If a user selected one PDF, apply the same **`doc_id` filter** on both retrievers; otherwise, search across all documents.
-- Combine results with LangChain **`EnsembleRetriever`**, `weights=[0.7, 0.3]` (vector then BM25). Vector-heavy weights favor paraphrased questions; BM25 still helps with exact terms, names, and acronyms.
-- Pass about **top-k = 5** fused chunks into the answer prompt as an initial setting. Tune with keyword-heavy and semantic eval questions.
-- Preserve each chunk's citation metadata (`doc_id`, `source`, `page`, `section`) through both retrievers and fusion.
+- Let the user choose a retriever mode: **`vector`**, **`bm25`**, or **`hybrid`** (default). The Streamlit UI and `GET /query?retriever=` pass this mode through to retrieval.
+- Build retrievers over the indexed chunks as needed: a **Chroma vector retriever** and/or a **BM25** lexical retriever.
+- If a user selected one PDF, apply the same **`doc_id` filter** on the active retriever(s); otherwise, search across all documents.
+- For **`hybrid`**, combine results with LangChain **`EnsembleRetriever`**, `weights=[0.7, 0.3]` (vector then BM25). Vector-heavy weights favor paraphrased questions; BM25 still helps with exact terms, names, and acronyms.
+- Pass about **top-k = 5** chunks into the answer prompt as an initial setting. Tune with keyword-heavy and semantic eval questions.
+- Preserve each chunk's citation metadata (`doc_id`, `source`, `page`, `section`) through retrieval and fusion.
 
 ## Answer prompt
 

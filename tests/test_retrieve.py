@@ -70,10 +70,44 @@ def test_retrieve_returns_chunks_for_query(monkeypatch):
         metadatas=[{"doc_id": "doc-1"}],
     )
 
-    chunks = Retrieve.retrieve_relevant_chunks("neural networks")
+    chunks = Retrieve.retrieve_relevant_chunks("neural networks", retriever="hybrid")
 
     assert chunks
     assert all(isinstance(chunk, Document) for chunk in chunks)
+
+
+def test_retrieve_vector_mode(monkeypatch):
+    _patch_retrieve(
+        monkeypatch,
+        documents=[],
+        metadatas=[],
+        vector_docs=[
+            Document(
+                page_content="semantic match about neural networks",
+                metadata={"doc_id": "doc-1"},
+            )
+        ],
+    )
+
+    chunks = Retrieve.retrieve_relevant_chunks("neural networks", retriever="vector")
+
+    assert chunks
+    assert chunks[0].page_content == "semantic match about neural networks"
+    assert FakeChroma.last_get_where is None
+
+
+def test_retrieve_bm25_mode(monkeypatch):
+    _patch_retrieve(
+        monkeypatch,
+        documents=["neural networks and backpropagation"],
+        metadatas=[{"doc_id": "doc-1"}],
+    )
+
+    chunks = Retrieve.retrieve_relevant_chunks("neural networks", retriever="bm25")
+
+    assert chunks
+    assert all(isinstance(chunk, Document) for chunk in chunks)
+    assert FakeChroma.last_search_kwargs is None
 
 
 def test_retrieve_passes_doc_id_filter_to_get(monkeypatch):
@@ -83,7 +117,11 @@ def test_retrieve_passes_doc_id_filter_to_get(monkeypatch):
         metadatas=[{"doc_id": "doc-1"}],
     )
 
-    Retrieve.retrieve_relevant_chunks("transformers", doc_id="doc-1")
+    Retrieve.retrieve_relevant_chunks(
+        "transformers",
+        doc_id="doc-1",
+        retriever="hybrid",
+    )
 
     assert FakeChroma.last_get_where == {"doc_id": "doc-1"}
     assert FakeChroma.last_search_kwargs == {
@@ -99,6 +137,20 @@ def test_retrieve_returns_empty_when_store_empty(monkeypatch):
         metadatas=[],
     )
 
-    chunks = Retrieve.retrieve_relevant_chunks("anything")
+    chunks = Retrieve.retrieve_relevant_chunks("anything", retriever="hybrid")
 
     assert chunks == []
+
+
+def test_retrieve_rejects_unknown_mode(monkeypatch):
+    _patch_retrieve(
+        monkeypatch,
+        documents=["chunk"],
+        metadatas=[{"doc_id": "doc-1"}],
+    )
+
+    try:
+        Retrieve.retrieve_relevant_chunks("chunk", retriever="nope")
+        assert False, "expected ValueError"
+    except ValueError as exc:
+        assert "Unsupported retriever" in str(exc)

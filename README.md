@@ -10,7 +10,7 @@ A retrieval-augmented generation (RAG) assistant that answers questions about us
 - Clean and chunk extracted content while preserving citation metadata.
 - Assign each PDF a unique `doc_id` and store it with every chunk.
 - Embed chunks with the OpenAI Embeddings API and store them in a shared Chroma collection.
-- Retrieve with hybrid search: Chroma vector search and BM25 keyword search, combined with LangChain EnsembleRetriever (`weights=[0.7, 0.3]`, vector then BM25). Filter by `doc_id` when a single PDF is selected.
+- Choose a retriever mode in the UI: **vector**, **BM25**, or **both** (hybrid). Hybrid combines Chroma vector search and BM25 with LangChain EnsembleRetriever (`weights=[0.7, 0.3]`, vector then BM25) and is the default. Filter by `doc_id` when a single PDF is selected.
 - Browse indexed PDFs and query one selected document or all uploaded documents.
 - Generate cited answers from retrieved excerpts, and abstain when the documents do not provide enough evidence.
 
@@ -66,13 +66,13 @@ Each PDF gets a unique `doc_id`. Every chunk retains that ID and its citation me
 ### Question and answer
 
 ```text
-Question + optional doc_id
+Question + optional doc_id + retriever mode (vector | bm25 | hybrid)
     → Streamlit UI
     → FastAPI
-    → Parallel retrieval (same doc_id filter on both sides when selected)
-        → OpenAI query embedding → Chroma vector retriever
-        → BM25 retriever (lexical)
-    → EnsembleRetriever (weights 0.7 vector / 0.3 BM25) → fused results
+    → Retrieval by selected mode (same doc_id filter when selected)
+        → vector: OpenAI query embedding → Chroma
+        → bm25: BM25 over indexed chunks
+        → hybrid (default): both → EnsembleRetriever (0.7 vector / 0.3 BM25)
     → Grounded prompt with citation metadata
     → OpenAI LLM
     → Answer with citations, or abstention
